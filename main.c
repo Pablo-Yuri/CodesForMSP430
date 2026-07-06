@@ -1,43 +1,49 @@
 #include <msp430f5529.h>
-#include <stdio.h>
-
 #include "lcd.h"
 #include "ir.h"
 
+char hexTable[] = "0123456789ABCDEF";
+
+void byteToHex(uint8_t valor, char *str)
+{
+    str[0] = hexTable[(valor >> 4) & 0x0F];
+    str[1] = hexTable[valor & 0x0F];
+    str[2] = 0;
+}
+
 int main(void)
 {
-    char texto[17];
+    uint8_t cmd;
+
+    char texto[3];
 
     WDTCTL = WDTPW | WDTHOLD;
 
     P1DIR |= BIT0;
-    P1OUT &= ~BIT0;
 
-    LCD_Init();
+    lcdInit();
+
     IR_Init();
 
-    LCD_Clear();
+    lcdClear();
 
-    LCD_SetCursor(0,0);
-    LCD_WriteString("IR NEC Ready");
+    lcdWrite("IR READY");
 
     while(1)
     {
         if(IR_Available())
         {
-            uint8_t cmd;
-
             cmd = IR_GetCommand();
 
-            sprintf(texto,"CMD=%02X",cmd);
+            byteToHex(cmd,texto);
 
-            LCD_Clear();
+            lcdClear();
 
-            LCD_SetCursor(0,0);
-            LCD_WriteString("Recebido:");
+            lcdSetCursor(0,0);
+            lcdWrite("CMD:");
 
-            LCD_SetCursor(1,0);
-            LCD_WriteString(texto);
+            lcdSetCursor(1,0);
+            lcdWrite(texto);
 
             P1OUT ^= BIT0;
         }
