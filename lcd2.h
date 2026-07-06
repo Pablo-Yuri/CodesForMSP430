@@ -3,10 +3,9 @@
 
 #include <stdint.h>
 
-void LCD_Init(void);
-void LCD_Clear(void);
-void LCD_SetCursor(uint8_t row, uint8_t col);
-void LCD_WriteChar(char c);
-void LCD_WriteString(char *str);
+void lcdInit(void);
+void lcdClear(void);
+void lcdWrite(char *str);
+void lcdSetCursor(uint8_t linha, uint8_t coluna);
 
 #endif
