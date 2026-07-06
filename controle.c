@@ -60,6 +60,7 @@ int main(void)
 
             case 0x18:
 
+                // cima
                 P1OUT ^= BIT0;
 
                 break;
