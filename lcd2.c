@@ -1,27 +1,28 @@
-#include "lcd.h"
 #include <msp430f5529.h>
-#include <stdint.h>
 #include "intrinsics.h"
+#include "lcd.h"
 
-#define LCD_I2C_ADDR   0x27
+#define LCD_I2C_ADDR  0x27
 
-#define LCD_RS         0x01
-#define LCD_EN         0x04
-#define LCD_BL         0x08
+#define LCD_RS        0x01
+#define LCD_RW        0x02
+#define LCD_EN        0x04
+#define LCD_BL        0x08
 
-static void I2C_Init(void);
-static uint8_t I2C_Send(uint8_t addr, uint8_t data);
+void initI2C_Master(void);
+uint8_t i2cSend(uint8_t slaveAddr, uint8_t data);
 
-static void LCD_WriteNibble(uint8_t nibble, uint8_t isChar);
-static void LCD_WriteByte(uint8_t byte, uint8_t isChar);
+uint8_t lcdWriteNibble(uint8_t nibble, uint8_t isChar);
+uint8_t lcdWriteByte(uint8_t byte, uint8_t isChar);
 
-static void I2C_Init(void)
+void initI2C_Master(void)
 {
     P3SEL |= BIT0 | BIT1;
 
     UCB0CTL1 |= UCSWRST;
 
     UCB0CTL0 = UCMST | UCMODE_3 | UCSYNC;
+
     UCB0CTL1 = UCSSEL_2 | UCSWRST;
 
     UCB0BR0 = 10;
@@ -30,9 +31,9 @@ static void I2C_Init(void)
     UCB0CTL1 &= ~UCSWRST;
 }
 
-static uint8_t I2C_Send(uint8_t addr, uint8_t data)
+uint8_t i2cSend(uint8_t slaveAddr, uint8_t data)
 {
-    UCB0I2CSA = addr;
+    UCB0I2CSA = slaveAddr;
 
     UCB0CTL1 |= UCTR | UCTXSTT;
 
@@ -49,77 +50,82 @@ static uint8_t I2C_Send(uint8_t addr, uint8_t data)
     return 0;
 }
 
-static void LCD_WriteNibble(uint8_t nibble, uint8_t isChar)
+uint8_t lcdWriteNibble(uint8_t nibble, uint8_t isChar)
 {
     uint8_t ctrl;
 
-    ctrl = (isChar ? LCD_RS : 0) | LCD_BL;
+    ctrl = LCD_BL;
 
-    I2C_Send(LCD_I2C_ADDR, nibble | ctrl);
-    I2C_Send(LCD_I2C_ADDR, nibble | ctrl | LCD_EN);
-    I2C_Send(LCD_I2C_ADDR, nibble | ctrl);
+    if(isChar)
+        ctrl |= LCD_RS;
+
+    i2cSend(LCD_I2C_ADDR,nibble | ctrl);
+
+    i2cSend(LCD_I2C_ADDR,nibble | ctrl | LCD_EN);
+
+    i2cSend(LCD_I2C_ADDR,nibble | ctrl);
+
+    return 0;
 }
 
-static void LCD_WriteByte(uint8_t byte, uint8_t isChar)
+uint8_t lcdWriteByte(uint8_t byte, uint8_t isChar)
 {
-    LCD_WriteNibble(byte & 0xF0, isChar);
-    LCD_WriteNibble((byte << 4) & 0xF0, isChar);
+    lcdWriteNibble(byte & 0xF0,isChar);
 
-    __delay_cycles(1000);
+    lcdWriteNibble((byte << 4) & 0xF0,isChar);
+
+    return 0;
 }
 
-void LCD_Init(void)
+void lcdInit(void)
 {
-    I2C_Init();
+    initI2C_Master();
 
     __delay_cycles(50000);
 
-    LCD_WriteNibble(0x30,0);
+    lcdWriteNibble(0x30,0);
     __delay_cycles(20000);
 
-    LCD_WriteNibble(0x30,0);
+    lcdWriteNibble(0x30,0);
     __delay_cycles(20000);
 
-    LCD_WriteNibble(0x30,0);
+    lcdWriteNibble(0x30,0);
     __delay_cycles(20000);
 
-    LCD_WriteNibble(0x20,0);
+    lcdWriteNibble(0x20,0);
     __delay_cycles(20000);
 
-    LCD_WriteByte(0x28,0);
-    LCD_WriteByte(0x0C,0);
-    LCD_WriteByte(0x06,0);
-    LCD_WriteByte(0x01,0);
+    lcdWriteByte(0x28,0);
+    lcdWriteByte(0x0C,0);
+    lcdWriteByte(0x06,0);
+    lcdWriteByte(0x01,0);
 
-    __delay_cycles(20000);
+    __delay_cycles(50000);
 }
 
-void LCD_Clear(void)
+void lcdClear(void)
 {
-    LCD_WriteByte(0x01,0);
-    __delay_cycles(20000);
+    lcdWriteByte(0x01,0);
+    __delay_cycles(50000);
 }
 
-void LCD_SetCursor(uint8_t row, uint8_t col)
+void lcdSetCursor(uint8_t linha, uint8_t coluna)
 {
     uint8_t addr;
 
-    addr = (row == 0) ? 0x80 : 0xC0;
-    addr += col;
+    if(linha == 0)
+        addr = 0x80 + coluna;
+    else
+        addr = 0xC0 + coluna;
 
-    LCD_WriteByte(addr,0);
+    lcdWriteByte(addr,0);
 }
 
-void LCD_WriteChar(char c)
-{
-    LCD_WriteByte((uint8_t)c,1);
-}
-
-void LCD_WriteString(char *str)
+void lcdWrite(char *str)
 {
     while(*str)
     {
-        LCD_WriteChar(*str++);
+        lcdWriteByte(*str,1);
+        str++;
     }
 }
-``
