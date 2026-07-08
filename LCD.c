@@ -39,29 +39,27 @@ void lcdWrite(char* str);
 void main(void){
 	WDTCTL = WDTPW | WDTHOLD;	
 	
-	// Configura os pinos GPIO para I2C
-    // UCB0: P3.0 = SDA, P3.1 = SCL
     P3SEL |= BIT0 | BIT1;                   // Atribui os pinos ao módulo I2C UCB0
 
-    // Inicializa o módulo I2C
     initI2C_Master();
 
-    // Esperar um pouco antes de realizar outra ação
     __delay_cycles(20000);
 
-    // Inicializar LCD
     lcdInit();
 
-    // Enviar string para ser escrita
     lcdWrite("Pablo Yuri");
 
-    // Loop infinito
-	for(;;){
-
-	}
 }
 
-void initI2C_Master(void) {
+void lcd_clear(void) {
+    // Envia o comando 0x01 para limpar o display e retornar o cursor para a posição inicial
+    lcdWriteByte(0x01, 0);
+    
+    // Aguarda um tempo suficiente para que o comando seja processado
+    __delay_cycles(20000);
+}
+
+void initI2_Master(void) {
     UCB0CTL1 |= UCSWRST;                    // Reseta para iniciar a configuração
     UCB0CTL0 = UCMST | UCMODE_3 | UCSYNC;   // Mestre, I2C (MODE = 3), síncrono
     UCB0CTL1 = UCSSEL_2 | UCSWRST;          // Usa SMCLK (1 MHz), mantém reset

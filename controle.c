@@ -9,16 +9,15 @@ volatile uint8_t estado = 0;
 volatile uint8_t bit = 0;
 
 volatile uint32_t frame = 0;
-
 volatile uint8_t comando = 0;
 volatile uint8_t dadoPronto = 0;
 
 volatile uint16_t pulsos[100];
 volatile uint8_t indice = 0;
 
-#define IR_IDLE        0
-#define IR_LEADER      1
-#define IR_RECEBENDO   2
+#define IR_IDLE 0
+// #define IR_LEADER      1
+#define IR_RECEBENDO 1
 
 void IR_Init(void)
 {
@@ -31,11 +30,11 @@ void IR_Init(void)
              TACLR;
 
     TA0CCTL1 =
-            CM_3 |         // captura subida e descida
-            CCIS_0 |       // CCI1A
-            CAP |
-            SCS |
-            CCIE;
+        CM_2 |   // captura subida e descida
+        CCIS_0 | // CCI1A
+        CAP |
+        SCS |
+        CCIE;
 
     __enable_interrupt();
 }
@@ -49,13 +48,13 @@ int main(void)
     P1DIR &= ~BIT0;
     P1OUT |= BIT0;
 
-    while(1)
+    while (1)
     {
-        if(dadoPronto)
+        if (dadoPronto)
         {
             dadoPronto = 0;
 
-            switch(comando)
+            switch (comando)
             {
 
             case 0x18:
@@ -89,112 +88,102 @@ int main(void)
 
                 break;
             }
-
         }
-
     }
-
 }
 
-#pragma vector=TIMER0_A1_VECTOR
+#pragma vector = TIMER0_A1_VECTOR
 __interrupt void TIMER0_A1_ISR(void)
 {
-    switch(__even_in_range(TA0IV,14))
+    switch (__even_in_range(TA0IV, 14))
     {
 
     case TA0IV_TACCR1:
+    {
+        uint16_t tempo;
+        tempo = TA0CCR1;
 
+        largura = tempo - ultimoTempo;
+
+        ultimoTempo = tempo;
+
+        if (indice < 100)
         {
-            uint16_t tempo = TA0CCR1;
+            pulsos[indice++] = largura;
+        }
 
-            largura = tempo - ultimoTempo;
-
-            ultimoTempo = tempo;
-
-            switch(estado)
-            {
+        switch (estado)
+        {
 
             //--------------------------------------------------
             // Espera Leader
             //--------------------------------------------------
 
-            case IR_IDLE:
+        case IR_IDLE:
+            if (largura > 12500 && largura < 14500)
+            {
+                indice = 0;
 
-                if(largura > 8500 && largura < 9500)
-                {
-                    estado = IR_LEADER;
-                }
+                pulsos[indice++] = largura;
 
-                break;
+                bit = 0;
+                frame = 0;
 
-            //--------------------------------------------------
-            // Espera espaço de 4,5 ms
-            //--------------------------------------------------
-
-            case IR_LEADER:
-
-                if(largura > 4000 && largura < 5000)
-                {
-                    estado = IR_RECEBENDO;
-
-                    bit = 0;
-
-                    frame = 0;
-                }
-                else
-                {
-                    estado = IR_IDLE;
-                }
-
-                break;
+                estado = IR_RECEBENDO;
+            }
+            break;
 
             //--------------------------------------------------
             // Recebendo dados
             //--------------------------------------------------
 
-            case IR_RECEBENDO:
-
-                /*
-                 * O protocolo NEC alterna:
-                 *
-                 * 560 LOW
-                 * 560 HIGH -> 0
-                 *
-                 * ou
-                 *
-                 * 560 LOW
-                 *1690 HIGH -> 1
-                 */
-
-                if(largura > 1300)
-                {
-                    frame |= (1UL<<bit);
-                }
-
-                bit++;
-
-                if(bit>=32)
-                {
-                    comando = (frame>>16)&0xFF;
-
-                    dadoPronto = 1;
-
-                    estado = IR_IDLE;
-                    __no_operation();
-                }
-                if(indice >= 68)
-                {
-                    capturaCompleta = 1;
-
-                    __no_operation();      // <-- Breakpoint aqui
-                }
-
+        case IR_RECEBENDO:
+            if (indice < 100)
+            {
+                pulsos[indice++] = largura;
+            }
+            if ((largura > 1800) && (largura < 2800))
+            {
+                frame |= (1UL << bit);
+            }
+            else if ((largura > 900) && (largura < 1500))
+            {
+                // bit 0
+            }
+            else
+            {
+                estado = IR_IDLE;
                 break;
             }
 
-        }
+            bit++;
+            // break;
 
+            if (bit >= 32)
+            {
+                uint8_t endereco;
+                uint8_t enderecoInv;
+                uint8_t cmd;
+                uint8_t cmdInv;
+
+                endereco = (frame >> 0) & 0xFF;
+                enderecoInv = (frame >> 8) & 0xFF;
+                cmd = (frame >> 16) & 0xFF;
+                cmdInv = (frame >> 24) & 0xFF;
+
+                if (((endereco ^ enderecoInv) == 0xFF) &&
+                    ((cmd ^ cmdInv) == 0xFF))
+                {
+                    comando = cmd;
+                    dadoPronto = 1;
+                }
+                estado = IR_IDLE;
+            }
+            break;
+        }
         break;
     }
-    pulsos[indice++] = largura;
+    default:
+        break;
+    }
 }
